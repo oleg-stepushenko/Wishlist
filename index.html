@@ -3,11 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>My Wishlist</title>
+    <title>Мої Вишлисти</title>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
     <style>
-        /* Тут ваш CSS код (залишається без змін) */
         :root {
             --primary: #6c5ce7;
             --secondary: #a29bfe;
@@ -16,6 +15,7 @@
             --dark: #2d3436;
             --success: #00b894;
             --danger: #d63031;
+            --warning: #fdcb6e;
         }
 
         * {
@@ -102,6 +102,15 @@
 
         .btn-success:hover {
             background: #009975;
+        }
+
+        .btn-warning {
+            background: var(--warning);
+            color: var(--dark);
+        }
+
+        .btn-warning:hover {
+            background: #e6ae1e;
         }
 
         .form-group {
@@ -312,6 +321,11 @@
             background: var(--danger);
         }
 
+        .notification.warning {
+            background: var(--warning);
+            color: var(--dark);
+        }
+
         .loading {
             text-align: center;
             padding: 20px;
@@ -325,9 +339,33 @@
             margin: 10px 0;
         }
 
+        .wishlist-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+
+        .wishlist-actions {
+            display: flex;
+            gap: 10px;
+        }
+
         @media (max-width: 768px) {
             .wishlist-grid {
                 grid-template-columns: 1fr;
+            }
+            
+            .wishlist-header {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+            
+            .wishlist-actions {
+                width: 100%;
+                justify-content: space-between;
             }
         }
     </style>
@@ -335,7 +373,7 @@
 <body>
     <div class="container">
         <header>
-            <h1>✨ My Wishlist ✨</h1>
+            <h1>✨ Мої Вишлисти ✨</h1>
             <p class="subtitle">Створюйте та керуйте своїми списками бажань</p>
         </header>
 
@@ -360,9 +398,12 @@
             </div>
 
             <div class="card hidden" id="current-wishlist">
-                <div class="wishlist-header" style="display: flex; justify-content: space-between; align-items: center;">
+                <div class="wishlist-header">
                     <h2 id="wishlist-title"></h2>
-                    <button class="btn" id="add-item-btn">Додати пункт</button>
+                    <div class="wishlist-actions">
+                        <button class="btn" id="add-item-btn">Додати пункт</button>
+                        <button class="btn btn-warning" id="delete-wishlist-btn">Видалити список</button>
+                    </div>
                 </div>
                 <div class="wishlist-grid" id="wishlist-items"></div>
             </div>
@@ -414,6 +455,27 @@ AliExpress"></textarea>
         </div>
     </div>
 
+    <!-- Модальне вікно для підтвердження видалення списку -->
+    <div class="modal" id="delete-modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Видалити список</h3>
+                <span class="close" data-modal="delete-modal">&times;</span>
+            </div>
+            <div class="form-group">
+                <p>Ви впевнені, що хочете видалити цей список? Цю дію неможливо скасувати.</p>
+            </div>
+            <div class="form-group">
+                <label for="confirm-delete">Введіть назву списку для підтвердження:</label>
+                <input type="text" id="confirm-delete" placeholder="Введіть назву списку">
+            </div>
+            <div style="display: flex; gap: 10px; justify-content: flex-end;">
+                <button class="btn" data-modal="delete-modal">Скасувати</button>
+                <button class="btn btn-danger" id="confirm-delete-btn">Видалити</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Сповіщення -->
     <div class="notification" id="notification"></div>
 
@@ -453,21 +515,33 @@ const firebaseConfig = {
         const wishlistTitle = document.getElementById('wishlist-title');
         const wishlistItems = document.getElementById('wishlist-items');
         const addItemBtn = document.getElementById('add-item-btn');
+        const deleteWishlistBtn = document.getElementById('delete-wishlist-btn');
         const itemModal = document.getElementById('item-modal');
-        const closeModal = document.querySelector('.close');
+        const deleteModal = document.getElementById('delete-modal');
+        const closeModal = document.querySelectorAll('.close');
         const saveItemBtn = document.getElementById('save-item-btn');
         const createWishlistBtn = document.getElementById('create-wishlist-btn');
         const accessBtn = document.getElementById('access-btn');
+        const confirmDeleteBtn = document.getElementById('confirm-delete-btn');
         const notification = document.getElementById('notification');
 
         // Обробники подій
         document.addEventListener('DOMContentLoaded', initApp);
         tabs.forEach(tab => tab.addEventListener('click', switchTab));
         addItemBtn.addEventListener('click', openAddItemModal);
-        closeModal.addEventListener('click', closeItemModal);
+        deleteWishlistBtn.addEventListener('click', openDeleteModal);
         saveItemBtn.addEventListener('click', saveItem);
         createWishlistBtn.addEventListener('click', createWishlist);
         accessBtn.addEventListener('click', accessWishlist);
+        confirmDeleteBtn.addEventListener('click', confirmDeleteWishlist);
+
+        // Закриття модальних вікон
+        closeModal.forEach(closeBtn => {
+            closeBtn.addEventListener('click', function() {
+                const modalId = this.getAttribute('data-modal') || 'item-modal';
+                document.getElementById(modalId).style.display = 'none';
+            });
+        });
 
         // Функції
         async function initApp() {
@@ -596,8 +670,9 @@ const firebaseConfig = {
             itemModal.style.display = 'flex';
         }
 
-        function closeItemModal() {
-            itemModal.style.display = 'none';
+        function openDeleteModal() {
+            document.getElementById('confirm-delete').value = '';
+            deleteModal.style.display = 'flex';
         }
 
         async function saveItem() {
@@ -634,7 +709,7 @@ const firebaseConfig = {
             
             await saveWishlistToFirebase(currentWishlistId, wishlists[currentWishlistId]);
             renderWishlistItems();
-            closeItemModal();
+            itemModal.style.display = 'none';
             showNotification('Пункт успішно збережено!', 'success');
         }
 
@@ -695,6 +770,37 @@ const firebaseConfig = {
             }
         }
 
+        async function confirmDeleteWishlist() {
+            const confirmInput = document.getElementById('confirm-delete').value;
+            const wishlistName = wishlists[currentWishlistId].name;
+            
+            if (confirmInput !== wishlistName) {
+                showNotification('Назва списку не співпадає!', 'error');
+                return;
+            }
+            
+            try {
+                // Видаляємо список з Firebase
+                await db.collection('wishlists').doc(currentWishlistId).delete();
+                
+                // Видаляємо список з локального об'єкта
+                delete wishlists[currentWishlistId];
+                
+                // Оновлюємо інтерфейс
+                currentWishlist.classList.add('hidden');
+                passwordForm.classList.add('hidden');
+                renderWishlists();
+                
+                // Закриваємо модальне вікно
+                deleteModal.style.display = 'none';
+                
+                showNotification('Список успішно видалено!', 'success');
+            } catch (error) {
+                console.error("Помилка видалення:", error);
+                showDetailedError('Помилка видалення списку', error);
+            }
+        }
+
         async function saveWishlistToFirebase(id, wishlistData) {
             try {
                 await db.collection('wishlists').doc(id).set(wishlistData);
@@ -736,10 +842,13 @@ const firebaseConfig = {
             showNotification(message, 'error');
         }
 
-        // Закриття модального вікна при кліку поза ним
+        // Закриття модальних вікон при кліку поза ними
         window.addEventListener('click', (e) => {
             if (e.target === itemModal) {
-                closeItemModal();
+                itemModal.style.display = 'none';
+            }
+            if (e.target === deleteModal) {
+                deleteModal.style.display = 'none';
             }
         });
     </script>
