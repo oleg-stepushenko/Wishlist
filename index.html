@@ -415,8 +415,9 @@ const firebaseConfig = {
          const db = firebase.firestore();
 
         // Для прикладу використовуємо localStorage, але в продакшені замініть на Firebase
-        let wishlists = JSON.parse(localStorage.getItem('wishlists')) || {};
+        let wishlists = {};
         let currentWishlistId = null;
+        let currentEditingItemIndex = null;
 
         // DOM елементи
         const tabs = document.querySelectorAll('.tab');
