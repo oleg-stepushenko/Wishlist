@@ -411,8 +411,8 @@ const firebaseConfig = {
 };
 
         // Ініціалізація Firebase (закоментуйте, якщо не використовуєте Firebase)
-        // firebase.initializeApp(firebaseConfig);
-        // const db = firebase.firestore();
+         firebase.initializeApp(firebaseConfig);
+         const db = firebase.firestore();
 
         // Для прикладу використовуємо localStorage, але в продакшені замініть на Firebase
         let wishlists = JSON.parse(localStorage.getItem('wishlists')) || {};
