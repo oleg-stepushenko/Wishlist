@@ -7,6 +7,7 @@
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
     <style>
+        /* Тут ваш CSS код (залишається без змін) */
         :root {
             --primary: #6c5ce7;
             --secondary: #a29bfe;
@@ -316,6 +317,14 @@
             padding: 20px;
         }
 
+        .error-message {
+            background: #ffebee;
+            color: #c62828;
+            padding: 15px;
+            border-radius: 10px;
+            margin: 10px 0;
+        }
+
         @media (max-width: 768px) {
             .wishlist-grid {
                 grid-template-columns: 1fr;
@@ -419,8 +428,15 @@ const firebaseConfig = {
   appId: "1:532616779852:web:e8d17793ba8364d9847ce9"
 };
 
-        // Ініціалізація Firebase
-        firebase.initializeApp(firebaseConfig);
+       // Ініціалізація Firebase
+        try {
+            firebase.initializeApp(firebaseConfig);
+            console.log("Firebase ініціалізовано успішно");
+        } catch (error) {
+            console.error("Помилка ініціалізації Firebase:", error);
+            showNotification('Помилка підключення до бази даних', 'error');
+        }
+        
         const db = firebase.firestore();
 
         // Глобальні змінні
@@ -456,7 +472,6 @@ const firebaseConfig = {
         // Функції
         async function initApp() {
             await loadWishlistsFromFirebase();
-            renderWishlists();
         }
 
         function switchTab(e) {
@@ -475,17 +490,20 @@ const firebaseConfig = {
 
         async function loadWishlistsFromFirebase() {
             try {
+                console.log("Початок завантаження списків з Firebase...");
                 const snapshot = await db.collection('wishlists').get();
                 wishlists = {};
                 
                 snapshot.forEach(doc => {
                     wishlists[doc.id] = doc.data();
+                    console.log("Завантажено список:", doc.id, doc.data());
                 });
                 
                 renderWishlists();
+                showNotification('Списки успішно завантажені!', 'success');
             } catch (error) {
                 console.error("Помилка завантаження:", error);
-                showNotification('Помилка завантаження списків', 'error');
+                showDetailedError('Помилка завантаження списків', error);
             }
         }
 
@@ -673,7 +691,7 @@ const firebaseConfig = {
                 tabs[0].click();
             } catch (error) {
                 console.error("Помилка створення:", error);
-                showNotification('Помилка створення списку', 'error');
+                showDetailedError('Помилка створення списку', error);
             }
         }
 
@@ -683,7 +701,7 @@ const firebaseConfig = {
                 console.log("Список збережено в Firebase");
             } catch (error) {
                 console.error("Помилка збереження:", error);
-                showNotification('Помилка збереження', 'error');
+                showDetailedError('Помилка збереження', error);
             }
         }
 
@@ -695,6 +713,27 @@ const firebaseConfig = {
             setTimeout(() => {
                 notification.classList.remove('show');
             }, 3000);
+        }
+
+        function showDetailedError(message, error) {
+            console.error(message, error);
+            
+            // Створюємо детальне повідомлення про помилку
+            const errorDiv = document.createElement('div');
+            errorDiv.className = 'error-message';
+            errorDiv.innerHTML = `
+                <strong>${message}</strong><br>
+                <small>Код помилки: ${error.code || 'Невідомо'}</small><br>
+                <small>Повідомлення: ${error.message || 'Невідомо'}</small>
+            `;
+            
+            // Додаємо повідомлення на сторінку
+            const firstCard = document.querySelector('.card');
+            if (firstCard) {
+                firstCard.appendChild(errorDiv);
+            }
+            
+            showNotification(message, 'error');
         }
 
         // Закриття модального вікна при кліку поза ним
