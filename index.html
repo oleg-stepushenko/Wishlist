@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Мої Вишлисти</title>
+    <title>My Wishlist</title>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
     <style>
@@ -16,6 +16,7 @@
             --success: #00b894;
             --danger: #d63031;
             --warning: #fdcb6e;
+            --info: #0984e3;
         }
 
         * {
@@ -111,6 +112,14 @@
 
         .btn-warning:hover {
             background: #e6ae1e;
+        }
+
+        .btn-info {
+            background: var(--info);
+        }
+
+        .btn-info:hover {
+            background: #0767b3;
         }
 
         .form-group {
@@ -326,6 +335,10 @@
             color: var(--dark);
         }
 
+        .notification.info {
+            background: var(--info);
+        }
+
         .loading {
             text-align: center;
             padding: 20px;
@@ -353,6 +366,48 @@
             gap: 10px;
         }
 
+        .access-badge {
+            display: inline-block;
+            padding: 5px 10px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: bold;
+            margin-left: 10px;
+        }
+
+        .access-badge.view {
+            background: var(--info);
+            color: white;
+        }
+
+        .access-badge.edit {
+            background: var(--success);
+            color: white;
+        }
+
+        .password-tabs {
+            display: flex;
+            margin-bottom: 15px;
+            border-bottom: 2px solid var(--light);
+        }
+
+        .password-tab {
+            padding: 10px 20px;
+            cursor: pointer;
+            font-weight: bold;
+            color: var(--dark);
+            opacity: 0.7;
+            transition: all 0.3s ease;
+            flex: 1;
+            text-align: center;
+        }
+
+        .password-tab.active {
+            color: var(--primary);
+            opacity: 1;
+            border-bottom: 3px solid var(--primary);
+        }
+
         @media (max-width: 768px) {
             .wishlist-grid {
                 grid-template-columns: 1fr;
@@ -373,7 +428,7 @@
 <body>
     <div class="container">
         <header>
-            <h1>✨ Мої Вишлисти ✨</h1>
+            <h1>✨ My Wishlist ✨</h1>
             <p class="subtitle">Створюйте та керуйте своїми списками бажань</p>
         </header>
 
@@ -389,6 +444,10 @@
                     <div class="loading">Завантаження списків...</div>
                 </div>
                 <div class="password-form hidden" id="password-form">
+                    <div class="password-tabs">
+                        <div class="password-tab active" data-access="view">Тільки перегляд</div>
+                        <div class="password-tab" data-access="edit">Повний доступ</div>
+                    </div>
                     <div class="form-group">
                         <label for="password">Пароль доступу:</label>
                         <input type="password" id="password" placeholder="Введіть пароль">
@@ -399,10 +458,12 @@
 
             <div class="card hidden" id="current-wishlist">
                 <div class="wishlist-header">
-                    <h2 id="wishlist-title"></h2>
-                    <div class="wishlist-actions">
-                        <button class="btn" id="add-item-btn">Додати пункт</button>
-                        <button class="btn btn-warning" id="delete-wishlist-btn">Видалити список</button>
+                    <div>
+                        <h2 id="wishlist-title"></h2>
+                        <span class="access-badge" id="access-badge"></span>
+                    </div>
+                    <div class="wishlist-actions" id="wishlist-actions">
+                        <!-- Кнопки будуть додані динамічно в залежності від рівня доступу -->
                     </div>
                 </div>
                 <div class="wishlist-grid" id="wishlist-items"></div>
@@ -417,8 +478,12 @@
                     <input type="text" id="new-wishlist-name" placeholder="Наприклад: Подарунки на день народження">
                 </div>
                 <div class="form-group">
-                    <label for="new-wishlist-password">Пароль для доступу:</label>
-                    <input type="password" id="new-wishlist-password" placeholder="Встановіть пароль">
+                    <label for="new-wishlist-view-password">Пароль для перегляду:</label>
+                    <input type="password" id="new-wishlist-view-password" placeholder="Пароль тільки для перегляду">
+                </div>
+                <div class="form-group">
+                    <label for="new-wishlist-edit-password">Пароль для редагування:</label>
+                    <input type="password" id="new-wishlist-edit-password" placeholder="Пароль для повного доступу">
                 </div>
                 <button class="btn btn-success" id="create-wishlist-btn">Створити список</button>
             </div>
@@ -490,7 +555,7 @@ const firebaseConfig = {
   appId: "1:532616779852:web:e8d17793ba8364d9847ce9"
 };
 
-       // Ініціалізація Firebase
+      // Ініціалізація Firebase
         try {
             firebase.initializeApp(firebaseConfig);
             console.log("Firebase ініціалізовано успішно");
@@ -505,17 +570,19 @@ const firebaseConfig = {
         let wishlists = {};
         let currentWishlistId = null;
         let currentEditingItemIndex = null;
+        let currentAccessLevel = null; // 'view' або 'edit'
 
         // DOM елементи
         const tabs = document.querySelectorAll('.tab');
         const tabContents = document.querySelectorAll('.tab-content');
         const wishlistsContainer = document.getElementById('wishlists-container');
         const passwordForm = document.getElementById('password-form');
+        const passwordTabs = document.querySelectorAll('.password-tab');
         const currentWishlist = document.getElementById('current-wishlist');
         const wishlistTitle = document.getElementById('wishlist-title');
         const wishlistItems = document.getElementById('wishlist-items');
-        const addItemBtn = document.getElementById('add-item-btn');
-        const deleteWishlistBtn = document.getElementById('delete-wishlist-btn');
+        const wishlistActions = document.getElementById('wishlist-actions');
+        const accessBadge = document.getElementById('access-badge');
         const itemModal = document.getElementById('item-modal');
         const deleteModal = document.getElementById('delete-modal');
         const closeModal = document.querySelectorAll('.close');
@@ -528,8 +595,7 @@ const firebaseConfig = {
         // Обробники подій
         document.addEventListener('DOMContentLoaded', initApp);
         tabs.forEach(tab => tab.addEventListener('click', switchTab));
-        addItemBtn.addEventListener('click', openAddItemModal);
-        deleteWishlistBtn.addEventListener('click', openDeleteModal);
+        passwordTabs.forEach(tab => tab.addEventListener('click', switchPasswordTab));
         saveItemBtn.addEventListener('click', saveItem);
         createWishlistBtn.addEventListener('click', createWishlist);
         accessBtn.addEventListener('click', accessWishlist);
@@ -560,6 +626,11 @@ const firebaseConfig = {
                     content.classList.add('active');
                 }
             });
+        }
+
+        function switchPasswordTab(e) {
+            passwordTabs.forEach(tab => tab.classList.remove('active'));
+            e.target.classList.add('active');
         }
 
         async function loadWishlistsFromFirebase() {
@@ -606,6 +677,10 @@ const firebaseConfig = {
             currentWishlistId = id;
             passwordForm.classList.remove('hidden');
             
+            // Скидаємо активний таб до перегляду
+            passwordTabs.forEach(tab => tab.classList.remove('active'));
+            passwordTabs[0].classList.add('active');
+            
             // Виділяємо обраний список
             document.querySelectorAll('.wishlist-card').forEach(card => {
                 card.classList.remove('active');
@@ -616,15 +691,66 @@ const firebaseConfig = {
         function accessWishlist() {
             const password = document.getElementById('password').value;
             const wishlist = wishlists[currentWishlistId];
+            const accessType = document.querySelector('.password-tab.active').getAttribute('data-access');
             
-            if (wishlist.password === password) {
+            let accessGranted = false;
+            
+            if (accessType === 'view' && password === wishlist.viewPassword) {
+                currentAccessLevel = 'view';
+                accessGranted = true;
+            } else if (accessType === 'edit' && password === wishlist.editPassword) {
+                currentAccessLevel = 'edit';
+                accessGranted = true;
+            }
+            
+            if (accessGranted) {
                 passwordForm.classList.add('hidden');
                 currentWishlist.classList.remove('hidden');
                 wishlistTitle.textContent = wishlist.name;
+                
+                // Встановлюємо бейдж доступу
+                accessBadge.textContent = currentAccessLevel === 'view' ? 'Тільки перегляд' : 'Повний доступ';
+                accessBadge.className = `access-badge ${currentAccessLevel}`;
+                
                 renderWishlistItems();
-                showNotification('Доступ надано!', 'success');
+                setupWishlistActions();
+                
+                const accessMessage = currentAccessLevel === 'view' 
+                    ? 'Доступ для перегляду надано!' 
+                    : 'Повний доступ надано!';
+                showNotification(accessMessage, 'success');
             } else {
                 showNotification('Невірний пароль!', 'error');
+            }
+        }
+
+        function setupWishlistActions() {
+            wishlistActions.innerHTML = '';
+            
+            if (currentAccessLevel === 'edit') {
+                // Повний доступ - показуємо всі кнопки
+                const addButton = document.createElement('button');
+                addButton.className = 'btn';
+                addButton.id = 'add-item-btn';
+                addButton.textContent = 'Додати пункт';
+                addButton.addEventListener('click', openAddItemModal);
+                
+                const deleteButton = document.createElement('button');
+                deleteButton.className = 'btn btn-warning';
+                deleteButton.id = 'delete-wishlist-btn';
+                deleteButton.textContent = 'Видалити список';
+                deleteButton.addEventListener('click', openDeleteModal);
+                
+                wishlistActions.appendChild(addButton);
+                wishlistActions.appendChild(deleteButton);
+            } else {
+                // Тільки перегляд - не показуємо кнопки редагування
+                const viewOnlyMessage = document.createElement('div');
+                viewOnlyMessage.textContent = 'Режим перегляду - редагування недоступне';
+                viewOnlyMessage.style.fontStyle = 'italic';
+                viewOnlyMessage.style.color = 'var(--dark)';
+                viewOnlyMessage.style.opacity = '0.7';
+                wishlistActions.appendChild(viewOnlyMessage);
             }
         }
 
@@ -633,13 +759,24 @@ const firebaseConfig = {
             const wishlist = wishlists[currentWishlistId];
             
             if (!wishlist.items || wishlist.items.length === 0) {
-                wishlistItems.innerHTML = '<p>Цей список поки що порожній. Додайте перший пункт!</p>';
+                wishlistItems.innerHTML = '<p>Цей список поки що порожній.</p>';
                 return;
             }
             
             wishlist.items.forEach((item, index) => {
                 const itemElement = document.createElement('div');
                 itemElement.className = 'wishlist-item';
+                
+                let actionsHTML = '';
+                if (currentAccessLevel === 'edit') {
+                    actionsHTML = `
+                        <div class="item-actions">
+                            <button class="btn" onclick="editItem(${index})">Редагувати</button>
+                            <button class="btn btn-danger" onclick="deleteItem(${index})">Видалити</button>
+                        </div>
+                    `;
+                }
+                
                 itemElement.innerHTML = `
                     ${item.image ? `<img src="${item.image}" alt="${item.name}" class="item-image" onerror="this.style.display='none'">` : ''}
                     <div class="item-content">
@@ -650,10 +787,7 @@ const firebaseConfig = {
                                 `<span class="purchase-option">${option}</span>`
                             ).join('') : ''}
                         </div>
-                        <div class="item-actions">
-                            <button class="btn" onclick="editItem(${index})">Редагувати</button>
-                            <button class="btn btn-danger" onclick="deleteItem(${index})">Видалити</button>
-                        </div>
+                        ${actionsHTML}
                     </div>
                 `;
                 wishlistItems.appendChild(itemElement);
@@ -736,9 +870,10 @@ const firebaseConfig = {
 
         async function createWishlist() {
             const name = document.getElementById('new-wishlist-name').value;
-            const password = document.getElementById('new-wishlist-password').value;
+            const viewPassword = document.getElementById('new-wishlist-view-password').value;
+            const editPassword = document.getElementById('new-wishlist-edit-password').value;
             
-            if (!name || !password) {
+            if (!name || !viewPassword || !editPassword) {
                 showNotification('Будь ласка, заповніть всі поля', 'error');
                 return;
             }
@@ -746,7 +881,8 @@ const firebaseConfig = {
             const id = 'wishlist_' + Date.now();
             const newWishlist = {
                 name,
-                password,
+                viewPassword,
+                editPassword,
                 items: [],
                 createdAt: new Date().toISOString()
             };
@@ -758,7 +894,8 @@ const firebaseConfig = {
                 renderWishlists();
                 
                 document.getElementById('new-wishlist-name').value = '';
-                document.getElementById('new-wishlist-password').value = '';
+                document.getElementById('new-wishlist-view-password').value = '';
+                document.getElementById('new-wishlist-edit-password').value = '';
                 
                 showNotification('Список успішно створено!', 'success');
                 
